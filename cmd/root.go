@@ -11,7 +11,7 @@ import (
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
 	Use:   "gptui",
-	Short: "Terminal UI for ChatGPT",
+	Short: "Terminal UI for OpenAI GPT",
 }
 
 func Execute() {
