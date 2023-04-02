@@ -10,6 +10,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
 )
 
 // chatCmd represents the chat command
@@ -27,6 +28,9 @@ var chatCmd = &cobra.Command{
 }
 
 func init() {
+	chatCmd.Flags().StringP("model", "m", "gpt-3.5-turbo", "Model to use. Default is gpt-3.5-turbo.")
+	viper.BindPFlags(chatCmd.Flags())
+
 	rootCmd.AddCommand(chatCmd)
 }
 
@@ -61,8 +65,12 @@ func initialModel() model {
 	ta.KeyMap.InsertNewline.SetKeys("enter")
 
 	vp := viewport.New(50, 5)
-	vp.SetContent(`Welcome to use ChatGPT!
-Type a message and press Enter to send.`)
+	vp.SetContent(fmt.Sprintf(
+		"%s\n\n%s%s\n%s",
+		"Welcome to use gptui Chat",
+		"You are using model: ",
+		viper.GetString("model"),
+		"Type a message and press Enter to send."))
 
 	return model{
 		textarea:    ta,
