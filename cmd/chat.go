@@ -106,7 +106,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 func (m model) View() string {
 	return fmt.Sprintf(
-		"%s\n\n%s",
+		"%s\n\n%s\n\n(ctrl+c to quit)",
 		m.viewport.View(),
 		m.textarea.View(),
 	) + "\n\n"
