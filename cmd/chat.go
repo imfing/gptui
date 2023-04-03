@@ -109,10 +109,12 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.viewport.SetContent(strings.Join(m.messages, "\n"))
 			m.textarea.Reset()
 			m.viewport.GotoBottom()
+			m.waiting = true
 			return m, sendChatCompletionRequest(viper.GetString("openai-api-key"), viper.GetString("model"), input)
 		}
 
 	case ChatCompletionResponse:
+		m.waiting = false
 		m.messages = append(m.messages, "ChatGPT: "+msg.Choices[0].Message.Content)
 		m.viewport.SetContent(strings.Join(m.messages, "\n"))
 		m.viewport.GotoBottom()
@@ -160,6 +162,7 @@ func sendChatCompletionRequest(token string, model string, message string) tea.C
 			return error(fmt.Errorf("OpenAI API key is not set. Please set it with the --openai-api-key flag"))
 		}
 
+		// TODO: make url a flag
 		// url := "https://api.openai.com/v1/chat/completions"
 		url := "http://localhost:8081"
 
@@ -208,10 +211,16 @@ func sendChatCompletionRequest(token string, model string, message string) tea.C
 }
 
 func (m model) View() string {
+	helpText := "(ctrl+c to quit)"
+	secondLine := m.textarea.View()
+	if m.waiting {
+		secondLine = "Waiting for response"
+	}
 
 	return fmt.Sprintf(
-		"%s\n\n%s\n\n(ctrl+c to quit)",
+		"%s\n\n%s\n\n%s",
 		m.viewport.View(),
-		m.textarea.View(),
+		secondLine,
+		helpText,
 	) + "\n\n"
 }
