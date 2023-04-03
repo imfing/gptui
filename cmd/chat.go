@@ -20,7 +20,7 @@ var chatCmd = &cobra.Command{
 	Long:  `Given a chat conversation, the model will return a chat completion response.`,
 	Run: func(cmd *cobra.Command, args []string) {
 		// TODO: support pipe in message
-		if _, err := tea.NewProgram(tui.New()).Run(); err != nil {
+		if _, err := tea.NewProgram(tui.NewModel()).Run(); err != nil {
 			log.Fatal(err)
 		}
 	},
