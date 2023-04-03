@@ -40,7 +40,7 @@ type Message struct {
 func sendChatCompletionRequest(endpoint string, token string, model string, message string) tea.Cmd {
 	return func() tea.Msg {
 		if len(token) == 0 {
-			return error(fmt.Errorf("OpenAI API key is not set. Please set it with the --openai-api-key flag"))
+			return fmt.Errorf("OpenAI API key is not set. Please set it with the --openai-api-key flag")
 		}
 
 		chatCompletionRequest := CompletionRequest{
@@ -75,7 +75,7 @@ func sendChatCompletionRequest(endpoint string, token string, model string, mess
 		}
 
 		if resp.StatusCode != http.StatusOK {
-			return error(fmt.Errorf("status code: %d, body: %s", resp.StatusCode, string(body)))
+			return fmt.Errorf("status code: %d, body: %s", resp.StatusCode, string(body))
 		}
 
 		var chatCompletion CompletionResponse
