@@ -1,9 +1,14 @@
 package cmd
 
 import (
+	"bytes"
+	"encoding/json"
 	"fmt"
+	"io"
 	"log"
+	"net/http"
 	"strings"
+	"time"
 
 	"github.com/charmbracelet/bubbles/textarea"
 	"github.com/charmbracelet/bubbles/viewport"
@@ -40,6 +45,7 @@ type model struct {
 	textarea    textarea.Model
 	senderStyle lipgloss.Style
 	err         error
+	waiting     bool
 }
 
 func (m model) Init() tea.Cmd {
@@ -78,6 +84,7 @@ func initialModel() model {
 		viewport:    vp,
 		senderStyle: lipgloss.NewStyle().Foreground(lipgloss.Color("5")),
 		err:         nil,
+		waiting:     false,
 	}
 }
 
@@ -97,14 +104,22 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			fmt.Println(m.textarea.Value())
 			return m, tea.Quit
 		case tea.KeyEnter:
-			m.messages = append(m.messages, m.senderStyle.Render("You: ")+m.textarea.Value())
+			input := m.textarea.Value()
+			m.messages = append(m.messages, m.senderStyle.Render("You: ")+input)
 			m.viewport.SetContent(strings.Join(m.messages, "\n"))
 			m.textarea.Reset()
 			m.viewport.GotoBottom()
+			return m, sendChatCompletionRequest(viper.GetString("openai-api-key"), viper.GetString("model"), input)
 		}
+
+	case ChatCompletionResponse:
+		m.messages = append(m.messages, "ChatGPT: "+msg.Choices[0].Message.Content)
+		m.viewport.SetContent(strings.Join(m.messages, "\n"))
+		m.viewport.GotoBottom()
 
 	// We handle errors just like any other message
 	case error:
+		// TODO: properly display error
 		m.err = msg
 		return m, nil
 	}
@@ -112,7 +127,88 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, tea.Batch(tiCmd, vpCmd)
 }
 
+type ChatCompletionResponse struct {
+	ID      string `json:"id,omitempty"`
+	Object  string `json:"object,omitempty"`
+	Created int64  `json:"created,omitempty"`
+	Choices []struct {
+		Index        int `json:"index,omitempty"`
+		Message      Message
+		FinishReason string `json:"finish_reason,omitempty"`
+	} `json:"choices,omitempty"`
+	Usage struct {
+		PromptTokens     int `json:"prompt_tokens,omitempty"`
+		CompletionTokens int `json:"completion_tokens,omitempty"`
+		TotalTokens      int `json:"total_tokens,omitempty"`
+	} `json:"usage,omitempty"`
+}
+
+type ChatCompletionRequest struct {
+	Model    string    `json:"model"`
+	Messages []Message `json:"messages"`
+}
+
+type Message struct {
+	Role    string `json:"role"`
+	Content string `json:"content"`
+}
+
+func sendChatCompletionRequest(token string, model string, message string) tea.Cmd {
+	return func() tea.Msg {
+		// if length of token is zero, return error
+		if len(token) == 0 {
+			return error(fmt.Errorf("OpenAI API key is not set. Please set it with the --openai-api-key flag"))
+		}
+
+		// url := "https://api.openai.com/v1/chat/completions"
+		url := "http://localhost:8081"
+
+		chatCompletionRequest := ChatCompletionRequest{
+			Model: model,
+			Messages: []Message{
+				{Role: "user", Content: message},
+			},
+		}
+
+		payload, err := json.Marshal(chatCompletionRequest)
+		if err != nil {
+			return error(err)
+		}
+
+		req, _ := http.NewRequest(http.MethodPost, url, bytes.NewBuffer(payload))
+
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", token))
+
+		client := &http.Client{
+			Timeout: 10 * time.Second,
+		}
+		resp, err := client.Do(req)
+		if err != nil {
+			log.Fatal(err)
+		}
+		defer resp.Body.Close()
+
+		body, err := io.ReadAll(resp.Body)
+		if err != nil {
+			panic(err)
+		}
+
+		if resp.StatusCode != http.StatusOK {
+			return error(fmt.Errorf("status code: %d, body: %s", resp.StatusCode, string(body)))
+		}
+
+		var chatCompletion ChatCompletionResponse
+		if err := json.Unmarshal(body, &chatCompletion); err != nil {
+			return error(err)
+		}
+
+		return chatCompletion
+	}
+}
+
 func (m model) View() string {
+
 	return fmt.Sprintf(
 		"%s\n\n%s\n\n(ctrl+c to quit)",
 		m.viewport.View(),
