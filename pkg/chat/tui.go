@@ -15,17 +15,13 @@ import (
 )
 
 var (
-	senderStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color("5"))
-	spinnerStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("63")).MarginTop(4)
-	helpStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color("241")).Margin(1, 0)
-	appStyle     = lipgloss.NewStyle().Margin(1, 2, 0, 2)
-	chatStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color("36"))
-	errorStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("9"))
-
-	textAreaStyle = lipgloss.NewStyle().
-			Border(lipgloss.RoundedBorder()).
-			BorderForeground(lipgloss.Color("238")).
-			Padding(0, 1)
+	appStyle      = lipgloss.NewStyle().Margin(1, 2, 0, 2)
+	senderStyle   = lipgloss.NewStyle().Background(lipgloss.Color("5")).Foreground(lipgloss.Color("#FAFAFA")).Padding(0, 1)
+	chatStyle     = lipgloss.NewStyle().Background(lipgloss.Color("36")).Foreground(lipgloss.Color("#FAFAFA")).Padding(0, 1)
+	textAreaStyle = lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(lipgloss.Color("238")).Padding(0, 1)
+	spinnerStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color("63")).MarginTop(4)
+	helpStyle     = lipgloss.NewStyle().Foreground(lipgloss.Color("241")).Margin(1, 0)
+	errorStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color("9"))
 )
 
 var textAreaHeight = 4
@@ -101,7 +97,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, tea.Quit
 		case key.Matches(msg, m.keys.Send):
 			input, _ := m.renderer.Render(m.textarea.Value())
-			m.messages = append(m.messages, senderStyle.Render("You: ")+input)
+			m.messages = append(m.messages, senderStyle.Render("You")+input)
 			m.viewport.SetContent(strings.Join(m.messages, "\n"))
 			m.textarea.Reset()
 			m.viewport.GotoBottom()
@@ -129,11 +125,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case CompletionResponse:
 		m.waiting = false
 		output, _ := m.renderer.Render(msg.Choices[0].Message.Content)
-		m.messages = append(m.messages, chatStyle.Render("ChatGPT: ")+output+"\n")
+		m.messages = append(m.messages, chatStyle.Render("ChatGPT")+output+"\n")
 		m.viewport.SetContent(strings.Join(m.messages, "\n"))
 		m.viewport.GotoBottom()
 
-	// We handle errors just like any other message
+	// handle errors just like any other message
 	case error:
 		m.err = msg
 		return m, nil
