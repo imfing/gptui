@@ -6,7 +6,9 @@ import (
 	"github.com/charmbracelet/bubbles/textarea"
 	"github.com/charmbracelet/bubbles/viewport"
 	"github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/glamour"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/muesli/termenv"
 	"github.com/spf13/viper"
 	"strings"
 )
@@ -32,6 +34,7 @@ type Model struct {
 	messages []string
 	textarea textarea.Model
 	spinner  spinner.Model
+	renderer *glamour.TermRenderer
 	err      error
 	waiting  bool
 }
@@ -61,19 +64,29 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case tea.KeyCtrlC:
 			return m, tea.Quit
 		case tea.KeyEnter:
-			input := m.textarea.Value()
+			input, _ := m.renderer.Render(m.textarea.Value())
 			m.messages = append(m.messages, senderStyle.Render("You: ")+input)
 			m.viewport.SetContent(strings.Join(m.messages, "\n"))
 			m.textarea.Reset()
 			m.viewport.GotoBottom()
 			m.waiting = true
-			return m, sendChatCompletionRequest(endpoint, token, chatModel, input)
+			return m, sendChatCompletionRequest(endpoint, token, chatModel, m.textarea.Value())
 		}
 
 	case tea.WindowSizeMsg:
-		m.viewport.Width = msg.Width - 1
+		x, _ := appStyle.GetFrameSize()
+		m.viewport.Width = msg.Width - x
 		m.viewport.Height = msg.Height - (8 + textAreaHeight)
-		m.textarea.SetWidth(msg.Width - 4)
+		m.textarea.SetWidth(msg.Width - x)
+
+		glamourStyle := LightStyleConfig
+		if termenv.HasDarkBackground() {
+			glamourStyle = DarkStyleConfig
+		}
+		m.renderer, _ = glamour.NewTermRenderer(
+			glamour.WithStyles(glamourStyle),
+			glamour.WithWordWrap(msg.Width-x),
+		)
 
 	case spinner.TickMsg:
 		var cmd tea.Cmd
@@ -82,7 +95,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case CompletionResponse:
 		m.waiting = false
-		m.messages = append(m.messages, chatStyle.Render("ChatGPT: ")+msg.Choices[0].Message.Content+"\n")
+		output, _ := m.renderer.Render(msg.Choices[0].Message.Content)
+		m.messages = append(m.messages, chatStyle.Render("ChatGPT: ")+output+"\n")
 		m.viewport.SetContent(strings.Join(m.messages, "\n"))
 		m.viewport.GotoBottom()
 
