@@ -10,11 +10,11 @@ var (
 	DarkStyleConfig = ansi.StyleConfig{
 		Document: ansi.StyleBlock{
 			StylePrimitive: ansi.StylePrimitive{
-				BlockPrefix: "",
+				BlockPrefix: "\n",
 				BlockSuffix: "\n",
 				Color:       stringPtr("252"),
 			},
-			Margin: uintPtr(0),
+			Margin: uintPtr(1),
 		},
 		BlockQuote: ansi.StyleBlock{
 			StylePrimitive: ansi.StylePrimitive{},

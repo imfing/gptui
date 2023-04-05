@@ -10,6 +10,7 @@ import (
 	"github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/glamour"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/muesli/termenv"
 	"github.com/spf13/viper"
 	"strings"
 )
@@ -27,7 +28,7 @@ var (
 var textAreaHeight = 4
 
 type keymap struct {
-	Esc, Quit, Send key.Binding
+	Esc, Quit, Send, NewLine key.Binding
 }
 
 var keys = keymap{
@@ -36,8 +37,12 @@ var keys = keymap{
 		key.WithHelp("esc", "exit fullscreen"),
 	),
 	Send: key.NewBinding(
-		key.WithKeys("ctrl+s"),
-		key.WithHelp("ctrl+s", "send"),
+		key.WithKeys("enter"),
+		key.WithHelp("enter", "send"),
+	),
+	NewLine: key.NewBinding(
+		key.WithKeys("ctrl+n"),
+		key.WithHelp("ctrl+n", "newline"),
 	),
 	Quit: key.NewBinding(
 		key.WithKeys("ctrl+c"),
@@ -48,14 +53,14 @@ var keys = keymap{
 // ShortHelp returns keybindings to be shown in the mini help view. It's part
 // of the key.Map interface.
 func (k keymap) ShortHelp() []key.Binding {
-	return []key.Binding{k.Send, k.Esc, k.Quit}
+	return []key.Binding{k.Send, k.NewLine, k.Esc, k.Quit}
 }
 
 // FullHelp returns keybindings for the expanded help view. It's part of the
 // key.Map interface.
 func (k keymap) FullHelp() [][]key.Binding {
 	return [][]key.Binding{
-		{k.Send, k.Esc, k.Quit},
+		{k.Send, k.NewLine, k.Esc, k.Quit},
 	}
 }
 
@@ -97,7 +102,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, tea.Quit
 		case key.Matches(msg, m.keys.Send):
 			input, _ := m.renderer.Render(m.textarea.Value())
-			m.messages = append(m.messages, senderStyle.Render("You")+input)
+			m.messages = append(m.messages, senderStyle.Render("You")+"\n"+input)
 			m.viewport.SetContent(strings.Join(m.messages, "\n"))
 			m.textarea.Reset()
 			m.viewport.GotoBottom()
@@ -111,8 +116,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.viewport.Height = msg.Height - (8 + textAreaHeight)
 		m.textarea.SetWidth(msg.Width - x)
 
+		glamourStyle := LightStyleConfig
+		if termenv.HasDarkBackground() {
+			glamourStyle = DarkStyleConfig
+		}
 		m.renderer, _ = glamour.NewTermRenderer(
-			glamour.WithAutoStyle(),
+			glamour.WithStyles(glamourStyle),
 			glamour.WithWordWrap(msg.Width-x-2),
 		)
 		// TODO: re-render messages based on new word wrap width
@@ -125,7 +134,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case CompletionResponse:
 		m.waiting = false
 		output, _ := m.renderer.Render(msg.Choices[0].Message.Content)
-		m.messages = append(m.messages, chatStyle.Render("ChatGPT")+output+"\n")
+		m.messages = append(m.messages, chatStyle.Render("ChatGPT")+"\n"+output)
 		m.viewport.SetContent(strings.Join(m.messages, "\n"))
 		m.viewport.GotoBottom()
 
@@ -158,6 +167,7 @@ func (m Model) View() string {
 	return appStyle.Render(s)
 }
 
+// newTextArea creates a text area model
 func newTextArea() textarea.Model {
 	t := textarea.New()
 	t.Prompt = ""
@@ -170,6 +180,7 @@ func newTextArea() textarea.Model {
 	return t
 }
 
+// NewModel creates a new chat tui model
 func NewModel() Model {
 	ta := newTextArea()
 	ta.SetWidth(50)
