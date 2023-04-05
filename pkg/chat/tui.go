@@ -245,6 +245,11 @@ func NewModel() Model {
 
 	chatModel := viper.GetString("model")
 
+	// read message from flag or pipe
+	if msg := viper.GetString("message"); len(msg) > 0 {
+		ta.SetValue(msg)
+	}
+
 	vp := viewport.New(50, 10)
 	vp.SetContent(fmt.Sprintf(
 		"%s\n\n%s\n%s",
