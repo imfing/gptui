@@ -110,7 +110,7 @@ type CompletionStreamResponse struct {
 func sendChatCompletionStreamRequest(endpoint string, token string, model string, message string, sub chan CompletionStreamResponse) tea.Cmd {
 	return func() tea.Msg {
 		if len(token) == 0 {
-			return fmt.Errorf("OpenAI API key is not set. Please set it with the --openai-api-key flag")
+			return fmt.Errorf("API token not set")
 		}
 
 		chatCompletionRequest := CompletionRequest{
@@ -124,7 +124,7 @@ func sendChatCompletionStreamRequest(endpoint string, token string, model string
 
 		payload, err := json.Marshal(chatCompletionRequest)
 		if err != nil {
-			return error(err)
+			return err
 		}
 
 		req, _ := http.NewRequest(http.MethodPost, endpoint, bytes.NewBuffer(payload))
@@ -138,7 +138,7 @@ func sendChatCompletionStreamRequest(endpoint string, token string, model string
 		client := &http.Client{}
 		resp, err := client.Do(req)
 		if err != nil {
-			log.Fatal(err)
+			return err
 		}
 		defer resp.Body.Close()
 
@@ -156,7 +156,7 @@ func sendChatCompletionStreamRequest(endpoint string, token string, model string
 				} else {
 					var streamResp CompletionStreamResponse
 					if err := json.Unmarshal([]byte(data), &streamResp); err != nil {
-						return error(err)
+						return err
 					}
 					sub <- streamResp
 				}

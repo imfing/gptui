@@ -69,6 +69,7 @@ func (k keymap) FullHelp() [][]key.Binding {
 	}
 }
 
+// Model stores the state
 type Model struct {
 	viewport  viewport.Model
 	messages  []string
@@ -197,22 +198,25 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, tea.Batch(commands...)
 }
 
+// View renders the UI
 func (m Model) View() string {
 	var s string
-
 	s += m.viewport.View() + "\n\n"
 
-	if m.err != nil {
-		return s + errorStyle.Render(fmt.Sprintf("error: %v", m.err))
-	}
-
-	if !m.waiting {
-		s += m.textarea.View() + "\n"
+	if m.err == nil {
+		if !m.waiting {
+			// textarea
+			s += m.textarea.View() + "\n"
+		} else {
+			// spinner
+			s += m.spinner.View() + " sending...\n\n"
+		}
+		// help view
+		s += m.help.View(m.keys)
 	} else {
-		s += m.spinner.View() + " sending...\n\n"
+		// display error
+		s += errorStyle.Render(fmt.Sprintf("error: %v\n\n", m.err))
 	}
-
-	s += m.help.View(m.keys)
 
 	return appStyle.Render(s)
 }
@@ -248,8 +252,7 @@ func NewModel() Model {
 		helpStyle.Render("Model: "+chatModel+"\n"),
 		"Type a message and press Ctrl+S to send."))
 
-	s := spinner.New()
-	s.Style = spinnerStyle
+	s := spinner.New(spinner.WithStyle(spinnerStyle))
 
 	return Model{
 		textarea:  ta,
