@@ -73,21 +73,30 @@ type Model struct {
 	err      error
 	waiting  bool
 	keys     keymap
+	sub      chan CompletionStreamResponse
+	stream   string
 	help     help.Model
 }
 
 func (m Model) Init() tea.Cmd {
-	return tea.Batch(textarea.Blink, tea.EnterAltScreen, m.spinner.Tick)
+	return tea.Batch(
+		textarea.Blink,
+		tea.EnterAltScreen,
+		m.spinner.Tick,
+		waitForStreamResponse(m.sub),
+	)
 }
 
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var (
-		tiCmd tea.Cmd
-		vpCmd tea.Cmd
+		tiCmd    tea.Cmd
+		vpCmd    tea.Cmd
+		commands []tea.Cmd
 	)
 
 	m.textarea, tiCmd = m.textarea.Update(msg)
 	m.viewport, vpCmd = m.viewport.Update(msg)
+	commands = []tea.Cmd{tiCmd, vpCmd}
 
 	endpoint := viper.GetString("endpoint")
 	token := viper.GetString("openai-api-key")
@@ -104,10 +113,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			input, _ := m.renderer.Render(m.textarea.Value())
 			m.messages = append(m.messages, senderStyle.Render("You")+"\n"+input)
 			m.viewport.SetContent(strings.Join(m.messages, "\n"))
+
+			commands = append(commands,
+				waitForStreamResponse(m.sub),
+				sendChatCompletionStreamRequest(endpoint, token, chatModel, m.textarea.Value(), m.sub))
+
 			m.textarea.Reset()
 			m.viewport.GotoBottom()
 			m.waiting = true
-			return m, sendChatCompletionRequest(endpoint, token, chatModel, m.textarea.Value())
 		}
 
 	case tea.WindowSizeMsg:
@@ -129,7 +142,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case spinner.TickMsg:
 		var cmd tea.Cmd
 		m.spinner, cmd = m.spinner.Update(msg)
-		return m, cmd
+		commands = append(commands, cmd)
 
 	case CompletionResponse:
 		m.waiting = false
@@ -138,13 +151,31 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.viewport.SetContent(strings.Join(m.messages, "\n"))
 		m.viewport.GotoBottom()
 
+	case CompletionStreamResponse:
+		if msg.Choices[0].FinishReason != "stop" {
+			commands = append(commands, waitForStreamResponse(m.sub))
+
+			if len(msg.Choices[0].Delta.Content) > 0 {
+				m.stream += msg.Choices[0].Delta.Content
+				output, _ := m.renderer.Render(m.stream)
+				content := chatStyle.Render("ChatGPT") + "\n" + output + "\n"
+				m.viewport.SetContent(strings.Join(m.messages, "\n") + content)
+				m.viewport.GotoBottom()
+			}
+		} else {
+			m.waiting = false
+			output, _ := m.renderer.Render(m.stream)
+			m.messages = append(m.messages, chatStyle.Render("ChatGPT")+"\n"+output)
+			m.stream = ""
+		}
+
 	// handle errors just like any other message
 	case error:
 		m.err = msg
 		return m, nil
 	}
 
-	return m, tea.Batch(tiCmd, vpCmd)
+	return m, tea.Batch(commands...)
 }
 
 func (m Model) View() string {
@@ -208,5 +239,6 @@ func NewModel() Model {
 		spinner:  s,
 		help:     help.New(),
 		keys:     keys,
+		sub:      make(chan CompletionStreamResponse),
 	}
 }
