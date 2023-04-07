@@ -11,10 +11,7 @@ import (
 	"os"
 )
 
-const (
-	chatModel    = "gpt-3.5-turbo"
-	chatEndpoint = "https://api.openai.com/v1/chat/completions"
-)
+const defaultModel = "gpt-3.5-turbo"
 
 // chatCmd represents the chat command
 var chatCmd = &cobra.Command{
@@ -47,9 +44,9 @@ var chatCmd = &cobra.Command{
 }
 
 func init() {
-	chatCmd.Flags().String("model", chatModel, "Model to use.")
-	chatCmd.Flags().String("endpoint", chatEndpoint, "Chat completion API endpoint.")
-	chatCmd.Flags().StringP("message", "m", "", "Message for ChatGPT.")
+	chatCmd.Flags().String("model", defaultModel, "Model to use.")
+	chatCmd.Flags().StringP("message", "m", "", "Message to send to ChatGPT.")
+	chatCmd.Flags().Bool("stream", true, "If set, partial message deltas will be sent, like in ChatGPT.")
 
 	err := viper.BindPFlags(chatCmd.Flags())
 	if err != nil {

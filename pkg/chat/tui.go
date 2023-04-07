@@ -25,7 +25,11 @@ var (
 	errorStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color("9"))
 )
 
-var textAreaHeight = 4
+var (
+	textAreaHeight = 4
+	chatGPTName    = "ChatGPT"
+	userName       = "You"
+)
 
 type keymap struct {
 	Help, Esc, Quit, Send, Multiline key.Binding
@@ -71,20 +75,20 @@ func (k keymap) FullHelp() [][]key.Binding {
 
 // Model stores the state
 type Model struct {
-	viewport  viewport.Model
-	messages  []string
-	textarea  textarea.Model
-	multiline bool
-	spinner   spinner.Model
-	renderer  *glamour.TermRenderer
-	waiting   bool
-	keys      keymap
-	sub       chan CompletionStreamResponse
-	stream    string
-	width     int
-	height    int
-	err       error
-	help      help.Model
+	client       *Client
+	viewport     viewport.Model
+	textarea     textarea.Model
+	spinner      spinner.Model
+	renderer     *glamour.TermRenderer
+	help         help.Model
+	keys         keymap
+	messages     []string
+	streamDeltas string
+	multiline    bool
+	waiting      bool
+	width        int
+	height       int
+	err          error
 }
 
 func (m Model) Init() tea.Cmd {
@@ -106,10 +110,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	m.viewport, vpCmd = m.viewport.Update(msg)
 	commands = []tea.Cmd{tiCmd, vpCmd}
 
-	endpoint := viper.GetString("endpoint")
-	token := viper.GetString("openai-api-key")
-	chatModel := viper.GetString("model")
-
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		switch {
@@ -129,15 +129,18 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case key.Matches(msg, m.keys.Send):
 			if !m.multiline && !m.waiting {
 				input, _ := m.renderer.Render(m.textarea.Value())
-				m.messages = append(m.messages, senderStyle.Render("You")+"\n"+input)
+				m.client.history = append(m.client.history, Message{Role: "user", Content: input})
+				m.messages = append(m.messages, senderStyle.Render(userName)+"\n"+input)
 				m.viewport.SetContent(strings.Join(m.messages, "\n"))
 
-				commands = append(commands,
-					waitForStreamResponse(m.sub),
-					sendChatCompletionStreamRequest(endpoint, token, chatModel, m.textarea.Value(), m.sub))
+				commands = append(commands, createCompletionCmd(m.client, m.textarea.Value()))
+				if m.client.stream {
+					commands = append(commands, waitEventsCmd(m.client))
+				}
 
 				m.textarea.Reset()
 				m.viewport.GotoBottom()
+				// set waiting to true so spinner will be visible
 				m.waiting = true
 			}
 		}
@@ -166,27 +169,33 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case CompletionResponse:
 		m.waiting = false
-		output, _ := m.renderer.Render(msg.Choices[0].Message.Content)
-		m.messages = append(m.messages, chatStyle.Render("ChatGPT")+"\n"+output)
+		choice := msg.Choices[0]
+		m.client.history = append(m.client.history, Message{Role: choice.Message.Role, Content: choice.Message.Content})
+		output, _ := m.renderer.Render(choice.Message.Content)
+		m.messages = append(m.messages, chatStyle.Render(chatGPTName)+"\n"+output)
 		m.viewport.SetContent(strings.Join(m.messages, "\n"))
 		m.viewport.GotoBottom()
 
 	case CompletionStreamResponse:
-		if msg.Choices[0].FinishReason != "stop" {
-			commands = append(commands, waitForStreamResponse(m.sub))
-
-			if len(msg.Choices[0].Delta.Content) > 0 {
-				m.stream += msg.Choices[0].Delta.Content
-				output, _ := m.renderer.Render(m.stream)
-				content := chatStyle.Render("ChatGPT") + "\n" + output + "\n"
+		choice := msg.Choices[0]
+		if choice.FinishReason == "stop" {
+			m.waiting = false
+			output, _ := m.renderer.Render(m.streamDeltas)
+			m.messages = append(m.messages, chatStyle.Render(chatGPTName)+"\n"+output)
+			// save stream response to client history
+			m.client.history = append(m.client.history, Message{Role: "assistant", Content: m.streamDeltas})
+			// reset stream message
+			m.streamDeltas = ""
+		} else {
+			// waiting for next event message
+			commands = append(commands, waitEventsCmd(m.client))
+			if len(choice.Delta.Content) > 0 {
+				m.streamDeltas += choice.Delta.Content
+				output, _ := m.renderer.Render(m.streamDeltas)
+				content := chatStyle.Render(chatGPTName) + "\n" + output + "\n"
 				m.viewport.SetContent(strings.Join(m.messages, "\n") + content)
 				m.viewport.GotoBottom()
 			}
-		} else {
-			m.waiting = false
-			output, _ := m.renderer.Render(m.stream)
-			m.messages = append(m.messages, chatStyle.Render("ChatGPT")+"\n"+output)
-			m.stream = ""
 		}
 
 	// handle errors just like any other message
@@ -243,32 +252,67 @@ func NewModel() Model {
 	ta.SetHeight(textAreaHeight)
 	ta.Focus()
 
-	chatModel := viper.GetString("model")
-
 	// read message from flag or pipe
 	if msg := viper.GetString("message"); len(msg) > 0 {
 		ta.SetValue(msg)
 	}
 
-	vp := viewport.New(50, 10)
-	vp.SetContent(fmt.Sprintf(
-		"%s\n\n%s\n%s",
-		"Welcome to use ChatGPT terminal UI",
+	chatModel := viper.GetString("model")
+	baseURL := viper.GetString("base-url")
+	token := viper.GetString("openai-api-key")
+	stream := viper.GetBool("stream")
+
+	welcomeMessage := fmt.Sprintf("%s\n\n%s\n%s",
+		"ChatGPT Terminal UI",
 		helpStyle.Render("Model: "+chatModel+"\n"),
-		"Type a message and press Ctrl+S to send."))
+		"Type a message and press Enter to send.")
+
+	// init viewport where the conversations will be displayed
+	vp := viewport.New(50, 10)
+	vp.SetContent(welcomeMessage)
 
 	s := spinner.New(spinner.WithStyle(spinnerStyle))
 
 	return Model{
-		textarea:  ta,
-		viewport:  vp,
-		spinner:   s,
-		help:      help.New(),
-		keys:      keys,
-		messages:  []string{},
-		multiline: false,
-		waiting:   false,
-		sub:       make(chan CompletionStreamResponse),
-		err:       nil,
+		textarea: ta,
+		viewport: vp,
+		spinner:  s,
+		help:     help.New(),
+		keys:     keys,
+		messages: []string{},
+		client:   NewChatClient(baseURL, token, chatModel, stream),
+	}
+}
+
+// createCompletionCmd returns a tea.Cmd which constructs the CompletionRequest
+// and returns CompletionResponse if stream is set to false
+func createCompletionCmd(client *Client, message string) tea.Cmd {
+	return func() tea.Msg {
+		req := &CompletionRequest{
+			Model: client.model,
+			// TODO: include chat history without overflowing the token limit
+			Messages: []Message{
+				{Role: "user", Content: message},
+			},
+		}
+		// Blocking call to send completion request
+		resp, err := client.CreateCompletion(req)
+		if err != nil {
+			return err
+		}
+
+		// Return CompletionResponse if stream set to false
+		if !client.stream && resp != nil {
+			return resp
+		}
+		return nil
+	}
+}
+
+// waitEventsCmd listen to the events channel
+// Returns the value when received from the channel
+func waitEventsCmd(client *Client) tea.Cmd {
+	return func() tea.Msg {
+		return <-client.events
 	}
 }
