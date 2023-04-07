@@ -8,6 +8,8 @@ import (
 	"github.com/spf13/viper"
 )
 
+const BaseURL = "https://api.openai.com/v1"
+
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
 	Use:   "gptui",
@@ -25,6 +27,7 @@ func init() {
 	cobra.OnInitialize(initConfig)
 
 	rootCmd.PersistentFlags().String("openai-api-key", "", "OpenAI API Key")
+	rootCmd.PersistentFlags().String("base-url", BaseURL, "Base URL for OpenAI API")
 }
 
 func initConfig() {
