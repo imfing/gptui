@@ -131,7 +131,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				content, _ := m.renderMessages(m.client.history)
 				m.viewport.SetContent(content)
 
-				commands = append(commands, createCompletionCmd(m.client, m.textarea.Value()))
+				req := newCompletionRequest(m.client, m.textarea.Value())
+				commands = append(commands, createCompletionCmd(m.client, req))
 				if m.client.stream {
 					commands = append(commands, waitEventsCmd(m.client))
 				}
@@ -167,7 +168,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case CompletionResponse:
 		m.waiting = false
 		choice := msg.Choices[0]
-		m.client.history = append(m.client.history, Message{Role: choice.Message.Role, Content: choice.Message.Content})
+		m.client.history = append(m.client.history, choice.Message)
 		content, _ := m.renderMessages(m.client.history)
 
 		m.viewport.SetContent(content)
@@ -269,6 +270,7 @@ func NewModel() Model {
 	chatModel := viper.GetString("model")
 	baseURL := viper.GetString("base-url")
 	token := viper.GetString("openai-api-key")
+	system := viper.GetString("system")
 	stream := viper.GetBool("stream")
 
 	welcomeMessage := fmt.Sprintf("%s\n\n%s\n%s",
@@ -288,21 +290,25 @@ func NewModel() Model {
 		spinner:  s,
 		help:     help.New(),
 		keys:     keys,
-		client:   NewChatClient(baseURL, token, chatModel, stream),
+		client:   NewChatClient(baseURL, token, chatModel, system, stream),
 	}
+}
+
+// newCompletionRequest creates new CompletionRequest
+func newCompletionRequest(client *Client, message string) *CompletionRequest {
+	var messages []Message
+	// TODO: include chat history without overflowing the token limit
+	if len(client.system) > 0 && len(client.history) == 0 {
+		messages = append(messages, Message{Role: "system", Content: client.system})
+	}
+	messages = append(messages, Message{Role: "user", Content: message})
+	return &CompletionRequest{Model: client.model, Messages: messages}
 }
 
 // createCompletionCmd returns a tea.Cmd which constructs the CompletionRequest
 // and returns CompletionResponse if stream is set to false
-func createCompletionCmd(client *Client, message string) tea.Cmd {
+func createCompletionCmd(client *Client, req *CompletionRequest) tea.Cmd {
 	return func() tea.Msg {
-		req := &CompletionRequest{
-			Model: client.model,
-			// TODO: include chat history without overflowing the token limit
-			Messages: []Message{
-				{Role: "user", Content: message},
-			},
-		}
 		// Blocking call to send completion request
 		resp, err := client.CreateCompletion(req)
 		if err != nil {
@@ -338,10 +344,13 @@ func (m Model) renderMessages(messages []Message) (string, error) {
 			return "", err
 		}
 		var author string
-		if message.Role == "user" {
+		switch message.Role {
+		case "user":
 			author = user
-		} else {
+		case "assistant":
 			author = chat
+		default:
+			continue
 		}
 		output = author + output
 		renderedMessages = append(renderedMessages, output)

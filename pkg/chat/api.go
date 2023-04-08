@@ -79,6 +79,8 @@ type Client struct {
 	httpClient *rest.Client
 	// model ID of the model to use
 	model string
+	// system optional message that helps set the behavior of the assistant
+	system string
 	// stream if set to `true`, partial message deltas will be sent
 	stream bool
 	// token sets the Bearer token in the header for authentication
@@ -89,7 +91,7 @@ type Client struct {
 	history []Message
 }
 
-func NewChatClient(baseURL string, token string, model string, stream bool) *Client {
+func NewChatClient(baseURL string, token string, model string, system string, stream bool) *Client {
 	c := rest.NewClient(
 		rest.WithBaseURL(baseURL),
 		rest.WithTimeout(time.Minute),
@@ -97,6 +99,7 @@ func NewChatClient(baseURL string, token string, model string, stream bool) *Cli
 	client := &Client{
 		httpClient: c,
 		model:      model,
+		system:     system,
 		stream:     stream,
 		token:      token,
 		events:     make(chan CompletionStreamResponse),
