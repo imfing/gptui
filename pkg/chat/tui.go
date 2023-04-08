@@ -82,7 +82,6 @@ type Model struct {
 	renderer     *glamour.TermRenderer
 	help         help.Model
 	keys         keymap
-	messages     []string
 	streamDeltas string
 	multiline    bool
 	waiting      bool
@@ -128,10 +127,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.textarea.SetWidth(m.width - appStyle.GetHorizontalFrameSize())
 		case key.Matches(msg, m.keys.Send):
 			if !m.multiline && !m.waiting {
-				input, _ := m.renderer.Render(m.textarea.Value())
-				m.client.history = append(m.client.history, Message{Role: "user", Content: input})
-				m.messages = append(m.messages, senderStyle.Render(userName)+"\n"+input)
-				m.viewport.SetContent(strings.Join(m.messages, "\n"))
+				m.client.history = append(m.client.history, Message{Role: "user", Content: m.textarea.Value()})
+				content, _ := m.renderMessages(m.client.history)
+				m.viewport.SetContent(content)
 
 				commands = append(commands, createCompletionCmd(m.client, m.textarea.Value()))
 				if m.client.stream {
@@ -152,15 +150,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.viewport.Height = msg.Height - (8 + textAreaHeight)
 		m.textarea.SetWidth(msg.Width - h)
 
-		glamourStyle := LightStyleConfig
-		if termenv.HasDarkBackground() {
-			glamourStyle = DarkStyleConfig
+		m.renderer, _ = newGlamourRenderer(msg.Width - h - 2)
+
+		// re-render the conversation
+		if !m.waiting && len(m.client.history) > 0 {
+			content, _ := m.renderMessages(m.client.history)
+			m.viewport.SetContent(content)
+			m.viewport.GotoBottom()
 		}
-		m.renderer, _ = glamour.NewTermRenderer(
-			glamour.WithStyles(glamourStyle),
-			glamour.WithWordWrap(msg.Width-h-2),
-		)
-		// TODO: re-render messages based on new word wrap width
 
 	case spinner.TickMsg:
 		var cmd tea.Cmd
@@ -171,17 +168,15 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.waiting = false
 		choice := msg.Choices[0]
 		m.client.history = append(m.client.history, Message{Role: choice.Message.Role, Content: choice.Message.Content})
-		output, _ := m.renderer.Render(choice.Message.Content)
-		m.messages = append(m.messages, chatStyle.Render(chatGPTName)+"\n"+output)
-		m.viewport.SetContent(strings.Join(m.messages, "\n"))
+		content, _ := m.renderMessages(m.client.history)
+
+		m.viewport.SetContent(content)
 		m.viewport.GotoBottom()
 
 	case CompletionStreamResponse:
 		choice := msg.Choices[0]
 		if choice.FinishReason == "stop" {
 			m.waiting = false
-			output, _ := m.renderer.Render(m.streamDeltas)
-			m.messages = append(m.messages, chatStyle.Render(chatGPTName)+"\n"+output)
 			// save stream response to client history
 			m.client.history = append(m.client.history, Message{Role: "assistant", Content: m.streamDeltas})
 			// reset stream message
@@ -191,9 +186,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			commands = append(commands, waitEventsCmd(m.client))
 			if len(choice.Delta.Content) > 0 {
 				m.streamDeltas += choice.Delta.Content
-				output, _ := m.renderer.Render(m.streamDeltas)
-				content := chatStyle.Render(chatGPTName) + "\n" + output + "\n"
-				m.viewport.SetContent(strings.Join(m.messages, "\n") + content)
+				delta, _ := m.renderer.Render(m.streamDeltas)
+				output := chatStyle.Render(chatGPTName) + "\n" + delta + "\n"
+				history, _ := m.renderMessages(m.client.history)
+				m.viewport.SetContent(history + output)
 				m.viewport.GotoBottom()
 			}
 		}
@@ -228,6 +224,19 @@ func (m Model) View() string {
 	}
 
 	return appStyle.Render(s)
+}
+
+// newGlamourRenderer creates new glamour Markdown renderer with given wordWrap width
+func newGlamourRenderer(wordWrap int) (*glamour.TermRenderer, error) {
+	glamourStyle := LightStyleConfig
+	if termenv.HasDarkBackground() {
+		glamourStyle = DarkStyleConfig
+	}
+	renderer, err := glamour.NewTermRenderer(
+		glamour.WithStyles(glamourStyle),
+		glamour.WithWordWrap(wordWrap),
+	)
+	return renderer, err
 }
 
 // newTextArea creates a text area model
@@ -279,7 +288,6 @@ func NewModel() Model {
 		spinner:  s,
 		help:     help.New(),
 		keys:     keys,
-		messages: []string{},
 		client:   NewChatClient(baseURL, token, chatModel, stream),
 	}
 }
@@ -315,4 +323,28 @@ func waitEventsCmd(client *Client) tea.Cmd {
 	return func() tea.Msg {
 		return <-client.events
 	}
+}
+
+// renderMessages renders the content of Markdown messages
+func (m Model) renderMessages(messages []Message) (string, error) {
+	var renderedMessages []string
+
+	user := senderStyle.Render(userName) + "\n"
+	chat := chatStyle.Render(chatGPTName) + "\n"
+
+	for _, message := range messages {
+		output, err := m.renderer.Render(message.Content)
+		if err != nil {
+			return "", err
+		}
+		var author string
+		if message.Role == "user" {
+			author = user
+		} else {
+			author = chat
+		}
+		output = author + output
+		renderedMessages = append(renderedMessages, output)
+	}
+	return strings.Join(renderedMessages, "\n"), nil
 }
