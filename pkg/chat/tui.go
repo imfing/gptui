@@ -1,6 +1,7 @@
 package chat
 
 import (
+	"encoding/json"
 	"fmt"
 	"github.com/charmbracelet/bubbles/help"
 	"github.com/charmbracelet/bubbles/key"
@@ -12,7 +13,11 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/muesli/termenv"
 	"github.com/spf13/viper"
+	"log"
+	"os"
+	"path"
 	"strings"
+	"time"
 )
 
 var (
@@ -83,6 +88,7 @@ type Model struct {
 	help         help.Model
 	keys         keymap
 	streamDeltas string
+	sessionId    string
 	multiline    bool
 	waiting      bool
 	width        int
@@ -151,6 +157,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.viewport.Height = msg.Height - (8 + textAreaHeight)
 		m.textarea.SetWidth(msg.Width - h)
 
+		if m.viewport.Height <= 0 {
+			m.err = fmt.Errorf("terminal size too small")
+			return m, nil
+		}
+
 		m.renderer, _ = newGlamourRenderer(msg.Width - h - 2)
 
 		// re-render the conversation
@@ -182,6 +193,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.client.history = append(m.client.history, Message{Role: "assistant", Content: m.streamDeltas})
 			// reset stream message
 			m.streamDeltas = ""
+
+			m.saveHistory()
 		} else {
 			// waiting for next event message
 			commands = append(commands, waitEventsCmd(m.client))
@@ -271,7 +284,10 @@ func NewModel() Model {
 	baseURL := viper.GetString("base-url")
 	token := viper.GetString("openai-api-key")
 	system := viper.GetString("system")
+	history := viper.GetString("history")
 	stream := viper.GetBool("stream")
+
+	sessionId := time.Now().Format("2006-01-02_15-04-05")
 
 	welcomeMessage := fmt.Sprintf("%s\n\n%s\n%s",
 		"ChatGPT Terminal UI",
@@ -284,14 +300,27 @@ func NewModel() Model {
 
 	s := spinner.New(spinner.WithStyle(spinnerStyle))
 
-	return Model{
-		textarea: ta,
-		viewport: vp,
-		spinner:  s,
-		help:     help.New(),
-		keys:     keys,
-		client:   NewChatClient(baseURL, token, chatModel, system, stream),
+	client := NewChatClient(baseURL, token, chatModel, system, stream)
+	m := Model{
+		textarea:  ta,
+		viewport:  vp,
+		spinner:   s,
+		help:      help.New(),
+		keys:      keys,
+		sessionId: sessionId,
+		client:    client,
 	}
+
+	// restore history if necessary
+	if len(history) > 0 {
+		err := m.loadHistory(history)
+		if err != nil {
+			log.Fatal(err)
+		}
+		fileName := path.Base(history)
+		m.sessionId = strings.TrimSuffix(fileName, path.Ext(fileName))
+	}
+	return m
 }
 
 // newCompletionRequest creates new CompletionRequest
@@ -356,4 +385,57 @@ func (m Model) renderMessages(messages []Message) (string, error) {
 		renderedMessages = append(renderedMessages, output)
 	}
 	return strings.Join(renderedMessages, "\n"), nil
+}
+
+// loadHistory reads conversation history from a JSON file
+func (m Model) loadHistory(filePath string) error {
+	// handle path starts with "~/"
+	if strings.HasPrefix(filePath, "~/") {
+		homeDir, err := os.UserHomeDir()
+		if err != nil {
+			return err
+		}
+		filePath = path.Join(homeDir, filePath[2:])
+	}
+	if _, err := os.Stat(filePath); os.IsNotExist(err) {
+		if err != nil {
+			return err
+		}
+	}
+	data, err := os.ReadFile(filePath)
+	if err != nil {
+		return err
+	}
+	err = json.Unmarshal(data, &m.client.history)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+// saveHistory saves chat history to JSON file
+func (m Model) saveHistory() error {
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		return err
+	}
+	dir := path.Join(homeDir, ".config", "gptui", "chat")
+
+	if _, err := os.Stat(dir); os.IsNotExist(err) {
+		err = os.MkdirAll(dir, 0755)
+		if err != nil {
+			return err
+		}
+	}
+	filepath := path.Join(dir, fmt.Sprintf("%s.json", m.sessionId))
+	data, err := json.Marshal(m.client.history)
+	if err != nil {
+		return err
+	}
+
+	err = os.WriteFile(filepath, data, 0644)
+	if err != nil {
+		return err
+	}
+	return nil
 }

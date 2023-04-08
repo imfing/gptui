@@ -47,6 +47,7 @@ func init() {
 	chatCmd.Flags().String("model", defaultModel, "Model to use.")
 	chatCmd.Flags().StringP("message", "m", "", "Message to send to ChatGPT.")
 	chatCmd.Flags().String("system", "", "System message that helps set the behavior of the assistant.")
+	chatCmd.Flags().String("history", "", "Path to conversation history file to restore from.")
 	chatCmd.Flags().Bool("stream", true, "If set, partial message deltas will be sent, like in ChatGPT.")
 
 	err := viper.BindPFlags(chatCmd.Flags())
