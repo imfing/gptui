@@ -10,10 +10,13 @@ import (
 
 const BaseURL = "https://api.openai.com/v1"
 
+var version = "dev"
+
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
-	Use:   "gptui",
-	Short: "Terminal UI for OpenAI GPT",
+	Use:     "gptui",
+	Short:   "Terminal UI for OpenAI GPT",
+	Version: version,
 }
 
 func Execute() {
