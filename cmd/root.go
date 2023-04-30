@@ -10,16 +10,14 @@ import (
 
 const BaseURL = "https://api.openai.com/v1"
 
-var version = "dev"
-
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
-	Use:     "gptui",
-	Short:   "Terminal UI for OpenAI GPT",
-	Version: version,
+	Use:   "gptui",
+	Short: "Terminal UI for OpenAI GPT",
 }
 
-func Execute() {
+func Execute(version string) {
+	rootCmd.Version = version
 	err := rootCmd.Execute()
 	if err != nil {
 		os.Exit(1)
