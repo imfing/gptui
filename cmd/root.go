@@ -26,8 +26,8 @@ func Execute() {
 func init() {
 	cobra.OnInitialize(initConfig)
 
-	rootCmd.PersistentFlags().String("openai-api-key", "", "OpenAI API Key")
-	rootCmd.PersistentFlags().String("base-url", BaseURL, "Base URL for OpenAI API")
+	rootCmd.PersistentFlags().String("openai-api-key", "", "OpenAI API key")
+	rootCmd.PersistentFlags().String("openai-api-base", BaseURL, "OpenAI API endpoint")
 }
 
 func initConfig() {
