@@ -1,3 +1,5 @@
+# Example: https://github.com/goreleaser/goreleaser/blob/main/.goreleaser.yaml
+
 before:
   hooks:
     - go mod tidy
@@ -21,7 +23,6 @@ checksum:
   name_template: 'checksums.txt'
 
 # https://goreleaser.com/customization/changelog/
-# https://github.com/goreleaser/goreleaser/blob/main/.goreleaser.yaml
 changelog:
   sort: asc
   use: github
@@ -55,3 +56,14 @@ changelog:
       - Merge remote-tracking branch
       - Merge branch
       - go mod tidy
+
+# https://goreleaser.com/customization/homebrew/
+brews:
+  - tap:
+      owner: imfing
+      name: homebrew-tap
+    folder: Formula
+    homepage: https://github.com/imfing/gptui
+    description: >-
+      Terminal UI for GPT.
+    license: MIT
