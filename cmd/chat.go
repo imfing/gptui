@@ -44,12 +44,12 @@ var chatCmd = &cobra.Command{
 }
 
 func init() {
-	chatCmd.Flags().String("model", defaultModel, "Model to use.")
-	chatCmd.Flags().StringP("message", "m", "", "Message for the chat input.")
-	chatCmd.Flags().String("system", "", "System message that helps set the behavior of the assistant.")
-	chatCmd.Flags().Int("max-context-length", 1024, "Maximum number of tokens for GPT context.")
-	chatCmd.Flags().String("history", "", "Path to conversation history file to restore from.")
-	chatCmd.Flags().Bool("stream", true, "If set, partial message deltas will be sent, like in ChatGPT.")
+	chatCmd.Flags().String("model", defaultModel, "model to use for chat completion")
+	chatCmd.Flags().StringP("message", "m", "", "message for the chat input")
+	chatCmd.Flags().String("system", "", "system message that helps set the behavior of the assistant")
+	chatCmd.Flags().Int("max-context-length", 1024, "maximum number of tokens for GPT context")
+	chatCmd.Flags().String("history", "", "path to conversation history file to restore from")
+	chatCmd.Flags().Bool("stream", true, "if set, partial message deltas will be sent, like in ChatGPT")
 
 	err := viper.BindPFlags(chatCmd.Flags())
 	if err != nil {
