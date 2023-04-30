@@ -75,4 +75,4 @@ brews:
     homepage: https://github.com/imfing/gptui
     description: >-
       Terminal UI for GPT.
-    license: MIT
+    license: Apache-2.0
