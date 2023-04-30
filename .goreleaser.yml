@@ -21,19 +21,37 @@ checksum:
   name_template: 'checksums.txt'
 
 # https://goreleaser.com/customization/changelog/
+# https://github.com/goreleaser/goreleaser/blob/main/.goreleaser.yaml
 changelog:
-  use: github
   sort: asc
+  use: github
   groups:
-    - title: Features
+    - title: Dependency updates
+      regexp: '^.*?(feat|fix)\(deps\)!?:.+$'
+      order: 300
+    - title: 'New Features'
       regexp: '^.*?feat(\([[:word:]]+\))??!?:.+$'
-      order: 0
+      order: 100
+    - title: 'Security updates'
+      regexp: '^.*?sec(\([[:word:]]+\))??!?:.+$'
+      order: 150
     - title: 'Bug fixes'
-      regexp: '^.*?bug(\([[:word:]]+\))??!?:.+$'
-      order: 1
-    - title: Others
-      order: 999
+      regexp: '^.*?fix(\([[:word:]]+\))??!?:.+$'
+      order: 200
+    - title: 'Documentation updates'
+      regexp: ^.*?doc(\([[:word:]]+\))??!?:.+$
+      order: 400
+    - title: 'Build process updates'
+      regexp: ^.*?build(\([[:word:]]+\))??!?:.+$
+      order: 400
+    - title: Other work
+      order: 9999
   filters:
     exclude:
-      - '^docs:'
-      - '^chore:'
+      - '^test:'
+      - '^chore'
+      - 'merge conflict'
+      - Merge pull request
+      - Merge remote-tracking branch
+      - Merge branch
+      - go mod tidy
