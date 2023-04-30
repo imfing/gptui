@@ -1,5 +1,7 @@
 # gptui
 
+[![Release](https://github.com/imfing/gptui/actions/workflows/release.yml/badge.svg)](https://github.com/imfing/gptui/actions/workflows/release.yml)
+
 Terminal UI for OpenAI ChatGPT
 
 <img src="https://user-images.githubusercontent.com/5097752/235353364-bf3b6b62-a29e-458c-b509-a48c52407fad.png" alt="gptui" width="500" />
