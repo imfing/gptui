@@ -283,7 +283,7 @@ func NewModel() Model {
 	}
 
 	chatModel := viper.GetString("model")
-	baseURL := viper.GetString("base-url")
+	baseURL := viper.GetString("openai-api-base")
 	token := viper.GetString("openai-api-key")
 	system := viper.GetString("system")
 	history := viper.GetString("history")
