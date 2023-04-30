@@ -45,8 +45,9 @@ var chatCmd = &cobra.Command{
 
 func init() {
 	chatCmd.Flags().String("model", defaultModel, "Model to use.")
-	chatCmd.Flags().StringP("message", "m", "", "Message to send to ChatGPT.")
+	chatCmd.Flags().StringP("message", "m", "", "Message for the chat input.")
 	chatCmd.Flags().String("system", "", "System message that helps set the behavior of the assistant.")
+	chatCmd.Flags().Int("max-context-length", 1024, "Maximum number of tokens for GPT context.")
 	chatCmd.Flags().String("history", "", "Path to conversation history file to restore from.")
 	chatCmd.Flags().Bool("stream", true, "If set, partial message deltas will be sent, like in ChatGPT.")
 

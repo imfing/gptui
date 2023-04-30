@@ -137,7 +137,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				content, _ := m.renderMessages(m.client.history)
 				m.viewport.SetContent(content)
 
-				req := newCompletionRequest(m.client, m.textarea.Value())
+				req := newCompletionRequest(m.client)
 				commands = append(commands, createCompletionCmd(m.client, req))
 				if m.client.stream {
 					commands = append(commands, waitEventsCmd(m.client))
@@ -181,6 +181,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		choice := msg.Choices[0]
 		m.client.history = append(m.client.history, choice.Message)
 		content, _ := m.renderMessages(m.client.history)
+
+		m.saveHistory()
 
 		m.viewport.SetContent(content)
 		m.viewport.GotoBottom()
@@ -285,6 +287,7 @@ func NewModel() Model {
 	token := viper.GetString("openai-api-key")
 	system := viper.GetString("system")
 	history := viper.GetString("history")
+	maxContextLength := viper.GetInt("max-context-length")
 	stream := viper.GetBool("stream")
 
 	sessionId := time.Now().Format("2006-01-02_15-04-05")
@@ -300,7 +303,7 @@ func NewModel() Model {
 
 	s := spinner.New(spinner.WithStyle(spinnerStyle))
 
-	client := NewChatClient(baseURL, token, chatModel, system, stream)
+	client := NewChatClient(baseURL, token, chatModel, system, stream, maxContextLength)
 	m := Model{
 		textarea:  ta,
 		viewport:  vp,
@@ -324,13 +327,31 @@ func NewModel() Model {
 }
 
 // newCompletionRequest creates new CompletionRequest
-func newCompletionRequest(client *Client, message string) *CompletionRequest {
+func newCompletionRequest(client *Client) *CompletionRequest {
 	var messages []Message
-	// TODO: include chat history without overflowing the token limit
-	if len(client.system) > 0 && len(client.history) == 0 {
+	totalTokenCount := 0
+
+	// add system message if specified
+	if len(client.system) > 0 {
 		messages = append(messages, Message{Role: "system", Content: client.system})
+		totalTokenCount += countTokens(client.system)
 	}
-	messages = append(messages, Message{Role: "user", Content: message})
+
+	// append previous conversations from history
+	var i int
+	for i = len(client.history) - 1; i >= 0; i-- {
+		if client.history[i].Role == "system" {
+			break
+		}
+		tokenCount := countTokens(client.history[i].Content)
+		if totalTokenCount+tokenCount <= client.maxContextLength {
+			totalTokenCount += tokenCount
+		} else {
+			break
+		}
+	}
+
+	messages = append(messages, client.history[i+1:]...)
 	return &CompletionRequest{Model: client.model, Messages: messages}
 }
 
@@ -419,6 +440,7 @@ func (m Model) saveHistory() error {
 	if err != nil {
 		return err
 	}
+	// TODO: make the history path configurable
 	dir := path.Join(homeDir, ".config", "gptui", "chat")
 
 	if _, err := os.Stat(dir); os.IsNotExist(err) {

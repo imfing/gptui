@@ -85,25 +85,29 @@ type Client struct {
 	stream bool
 	// token sets the Bearer token in the header for authentication
 	token string
+	// maxContextLength sets the limit for the number of tokens from context
+	maxContextLength int
 	// events is the channel for streaming the data-only server-sent events
 	events chan CompletionStreamResponse
 	// history stores list of previous messages
 	history []Message
 }
 
-func NewChatClient(baseURL string, token string, model string, system string, stream bool) *Client {
+// NewChatClient creates a Client configured for chat completion
+func NewChatClient(baseURL string, token string, model string, system string, stream bool, maxContextLength int) *Client {
 	c := rest.NewClient(
 		rest.WithBaseURL(baseURL),
 		rest.WithTimeout(time.Minute),
 	)
 	client := &Client{
-		httpClient: c,
-		model:      model,
-		system:     system,
-		stream:     stream,
-		token:      token,
-		events:     make(chan CompletionStreamResponse),
-		history:    []Message{},
+		httpClient:       c,
+		model:            model,
+		system:           system,
+		stream:           stream,
+		token:            token,
+		maxContextLength: maxContextLength,
+		events:           make(chan CompletionStreamResponse),
+		history:          []Message{},
 	}
 	return client
 }
