@@ -70,6 +70,7 @@ brews:
   - tap:
       owner: imfing
       name: homebrew-tap
+      token: "{{ .Env.TAP_GITHUB_TOKEN }}"
     folder: Formula
     homepage: https://github.com/imfing/gptui
     description: >-
