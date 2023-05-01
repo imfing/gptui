@@ -6,7 +6,36 @@ Terminal UI for OpenAI ChatGPT
 
 <img src="https://user-images.githubusercontent.com/5097752/235353364-bf3b6b62-a29e-458c-b509-a48c52407fad.png" alt="gptui" width="500" />
 
+## Features
+
+- Elegant and easy-to-use command line interface
+- Automatic syntax highlighting
+- Save and restore chat history locally
+
+## Installation
+
+Using [Homebrew](https://brew.sh/):
+
+```bash
+$ brew install imfing/tap/gptui
+```
+
+Or go to [Release](https://github.com/imfing/gptui/releases) page and manually install it.
+
 ## Usage
+
+[OpenAI API key](https://platform.openai.com/account/api-keys) is required. 
+Pass it as a command line argument or set an environment variable:
+```bash
+export OPENAI_API_KEY=<your-openai-api-key>
+```
+
+To start chat:
+```bash
+❯ gptui chat
+```
+
+Available flags:
 
 ```text
 ❯ gptui chat --help
