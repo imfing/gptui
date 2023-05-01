@@ -15,6 +15,7 @@ type Client struct {
 
 type ClientOption func(*Client)
 
+// NewClient creates new Client with given options.
 func NewClient(opts ...ClientOption) *Client {
 	client := &Client{
 		httpClient: &http.Client{},
@@ -26,18 +27,21 @@ func NewClient(opts ...ClientOption) *Client {
 	return client
 }
 
+// WithTimeout returns ClientOption which sets the timeout for the Client.
 func WithTimeout(timeout time.Duration) ClientOption {
 	return func(c *Client) {
 		c.httpClient.Timeout = timeout
 	}
 }
 
+// WithBaseURL returns ClientOption which sets the baseURL for the Client.
 func WithBaseURL(baseURL string) ClientOption {
 	return func(c *Client) {
 		c.baseURL = baseURL
 	}
 }
 
+// NewRequest creates a new http request.
 func (c *Client) NewRequest(path string, opts ...RequestOption) (*http.Request, error) {
 	reqURL, err := url.JoinPath(c.baseURL, path)
 	if err != nil {
@@ -55,6 +59,7 @@ func (c *Client) NewRequest(path string, opts ...RequestOption) (*http.Request, 
 	return req, nil
 }
 
+// Do sends http request and returns http response.
 func (c *Client) Do(req *http.Request) (*http.Response, error) {
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
